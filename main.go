@@ -1,14 +1,12 @@
 package main
 
 import (
-	"encoding/base64"
 	"flag"
 	"fmt"
-	"github.com/gin-gonic/gin"
 	"github.com/gomodule/redigo/redis"
+	"github.com/kataras/iris"
 	"log"
 	"math/rand"
-	"net/http"
 	"time"
 )
 
@@ -45,15 +43,13 @@ var redisPoolConfig *redisPoolConf
 var redisClient redis.Conn
 
 func main() {
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.Default()
+	app := iris.New()
+	app.RegisterView(iris.HTML("./views", ".html"))
 
 	port := flag.Int("port", defaultPort, "服务端口")
 	domain := flag.String("domain", "", "短链接域名，必填项")
-	ttl := flag.Int("ttl", defaultExpire, "短链接有效期，单位(天)，默认90天。")
 	conn := flag.String("conn", defaultRedisConfig, "Redis连接，格式: host:port")
 	passwd := flag.String("passwd", "", "Redis连接密码")
-	https := flag.Int("https", 0, "是否返回 https 短链接")
 	flag.Parse()
 
 	if *domain == "" {
@@ -72,57 +68,64 @@ func main() {
 	}
 	initRedisPool()
 
-	router.POST("/short", func(context *gin.Context) {
-		res := &Response{
-			Code:     1,
-			Message:  "",
-			LongUrl:  "",
-			ShortUrl: "",
-		}
-
-		longUrl := context.PostForm("longUrl")
-		if longUrl == "" {
-			res.Message = "longUrl为空"
-			context.JSON(400, *res)
-			return
-		}
-
-		_longUrl, _ := base64.StdEncoding.DecodeString(longUrl)
-		longUrl = string(_longUrl)
-
-		shortKey := longToShort(longUrl, *ttl*24*3600)
-		if shortKey == "" {
-			res.Code = 0
-			res.Message = "短链接生成失败"
-			context.JSON(500, *res)
-			return
-		}
-
-		log.Println(longUrl, shortKey)
-
-		res.LongUrl = longUrl
-
-		protocol := "http://"
-		if *https != 0 {
-			protocol = "https://"
-		}
-		res.ShortUrl = protocol + *domain + "/" + shortKey
-
-		context.JSON(200, *res)
+	app.Any("/", func(ctx iris.Context) {
+		ctx.View("ui.html")
 	})
 
-	router.GET("/:shortKey", func(context *gin.Context) {
-		shortKey := context.Param("shortKey")
-		longUrl := shortToLong(shortKey)
+	/*
+		app.Post("/short", func(context iris.Context) {
+			res := &Response{
+				Code:     1,
+				Message:  "",
+				LongUrl:  "",
+				ShortUrl: "",
+			}
 
-		if longUrl == "" {
-			context.String(http.StatusNotFound, "短链接不存在或已过期")
-		} else {
-			context.Redirect(http.StatusMovedPermanently, longUrl)
-		}
-	})
+			longUrl := context.PostForm("longUrl")
+			if longUrl == "" {
+				res.Message = "longUrl为空"
+				context.JSON(400, *res)
+				return
+			}
 
-	router.Run(fmt.Sprintf(":%d", *port))
+			_longUrl, _ := base64.StdEncoding.DecodeString(longUrl)
+			longUrl = string(_longUrl)
+
+			shortKey := longToShort(longUrl, *ttl*24*3600)
+			if shortKey == "" {
+				res.Code = 0
+				res.Message = "短链接生成失败"
+				context.JSON(500, *res)
+				return
+			}
+
+			log.Println(longUrl, shortKey)
+
+			res.LongUrl = longUrl
+
+			protocol := "http://"
+			if *https != 0 {
+				protocol = "https://"
+			}
+			res.ShortUrl = protocol + *domain + "/" + shortKey
+
+			context.JSON(200, *res)
+		})
+
+		app.Get("/{shortKey: string}", func(context iris.Context) {
+			shortKey := context.Param("shortKey")
+			longUrl := shortToLong(shortKey)
+
+			if longUrl == "" {
+				context.String(http.StatusNotFound, "短链接不存在或已过期")
+			} else {
+				context.Redirect(http.StatusMovedPermanently, longUrl)
+			}
+		})
+
+	*/
+
+	app.Run(iris.Addr(fmt.Sprintf(":%d", *port)))
 }
 
 // 短链接转长链接

@@ -1,4 +1,4 @@
-# bitly
+# MyUrls
 
 基于 golang1.13 与 Redis 实现的本地短链接服务，用于缩短请求链接与短链接还原。
 
